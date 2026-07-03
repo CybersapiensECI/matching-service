@@ -11,9 +11,6 @@
 *.sln.docstates
 *.env
 
-target/
-target/**
-
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
@@ -49,6 +46,10 @@ bld/
 [Oo]ut/
 [Ll]og/
 [Ll]ogs/
+
+# Permitir el package "out" de matchingservice
+!src/main/java/com/matchpuff/matchingservice/matching_service/domain/ports/out/
+!src/main/java/com/matchpuff/matchingservice/matching_service/domain/ports/out/ProfileServicePort.java
 
 # Build results on 'Bin' directories
 **/[Bb]in/*
@@ -430,3 +431,24 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Archivos y carpetas de Maven/Java a ignorar
+/target/
+*.class
+
+# Archivos de configuración de IDE
+/.idea/
+/.vscode/
+*.iml
+
+# Archivos del sistema
+.DS_Store
+*.swp
+*.swo
+
+# Node y otros entornos
+/node_modules/
+
+# Otros
+/coverage/
+/.scannerwork/
