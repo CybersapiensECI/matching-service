@@ -33,7 +33,7 @@ public class SwaggerConfig {
                         .version("1.0.0")
                         .description("""
                         Microservice responsible for match requests and user recommendation operations \
-                        within the Matchpuff platform. Handles creation, retrieval and lifecycle \
+                        within the AlphaECI platform. Handles creation, retrieval and lifecycle \
                         management of matches, as well as recommendation queries based on affinity \
                         and geolocation.
 
@@ -45,9 +45,8 @@ public class SwaggerConfig {
                         public API gateway.
                         """)
                         .contact(new Contact()
-                                .name("Matchpuff Team — Escuela Colombiana de Ingeniera Julio Garavito")
-                                .email("javier.romero-d@mail.escuelaing.edu.co")
-                                .email("andres.cardozo-m@mail.escuelaing.edu.co"))
+                                .name("AlphaECI Team — Escuela Colombiana de Ingeniería Julio Garavito")
+                                .email("crisiskitcheneci@gmail.com"))
                 )
                 .tags(Arrays.asList(
                         new Tag().name("Matches - Management")

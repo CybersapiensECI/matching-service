@@ -9,7 +9,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import co.edu.escuelaing.alphaeci.matching_service.domain.exceptions.MatchProfile;
+import co.edu.escuelaing.alphaeci.matching_service.domain.exceptions.MatchProfileException;
 
 
 
@@ -28,8 +28,8 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
-    @ExceptionHandler(MatchProfile.class)
-    public ResponseEntity<ErrorResponse> handleBusinessErrors(MatchProfile ex) {
+    @ExceptionHandler(MatchProfileException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessErrors(MatchProfileException ex) {
         ErrorResponse errorResponse = new ErrorResponse(ex.getMessage(), ex.getStatus().value());
         log.warn("Business error: {}", ex.getMessage());
         return new ResponseEntity<>(errorResponse, ex.getStatus());
