@@ -1,0 +1,30 @@
+package co.edu.escuelaing.alphaeci.matching_service.domain.model.enums;
+
+public enum CareersEnum {
+    // Ingenierías
+    SYSTEMS_ENGINEERING,
+    CIVIL_ENGINEERING,
+    INDUSTRIAL_ENGINEERING,
+    ELECTRONIC_ENGINEERING,
+    ELECTRICAL_ENGINEERING,
+    MECHANICAL_ENGINEERING,
+    BIOMEDICAL_ENGINEERING,
+    ENVIRONMENTAL_ENGINEERING,
+    STATISTICAL_ENGINEERING,
+    BIOTECHNOLOGY_ENGINEERING,
+    ARTIFICIAL_INTELLIGENCE_ENGINEERING,
+    CYBERSECURITY_ENGINEERING,
+
+    // Ciencias y tecnología
+    COMPUTER_SCIENCE,
+    MATHEMATICS,
+    DATA_SCIENCE,
+
+    // Negocios y economía
+    BUSINESS_ADMINISTRATION,
+    ECONOMICS,
+
+    // Tecnología
+    INFORMATION_TECHNOLOGY,
+    ALL // Filtro
+}
