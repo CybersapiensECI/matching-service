@@ -94,4 +94,108 @@ public class ProfileServiceAdapterTest {
         verify(profilePublicFeignClient).addFriend(eq(id), any());
     }
 
+    private static FeignException serverError(String methodKey) {
+        Request req = Request.create(Request.HttpMethod.GET, "http://x", java.util.Collections.emptyMap(), null, Charset.defaultCharset(), null);
+        Response resp = Response.builder().status(500).reason("err").request(req).build();
+        return FeignException.errorStatus(methodKey, resp);
+    }
+
+    @Test
+    void getProfileById_genericFeignException_throwsExternalServiceException() {
+        UUID id = UUID.randomUUID();
+        when(profileFeignClient.getProfileById(id)).thenThrow(serverError("getProfileById"));
+
+        assertThrows(ExternalServiceException.class, () -> adapter.getProfileById(id));
+    }
+
+    @Test
+    void getAllProfiles_success_mapsListOfDtos() {
+        UserMatchProfileDto dto = new UserMatchProfileDto();
+        dto.setId(UUID.randomUUID());
+        dto.setCareer("MATHEMATICS");
+        when(profileFeignClient.getAllProfiles()).thenReturn(List.of(dto));
+
+        var result = adapter.getAllProfiles();
+
+        assertEquals(1, result.size());
+        assertEquals("MATHEMATICS", result.get(0).getCareer());
+    }
+
+    @Test
+    void getAllProfilesExcludingUser_success_mapsListOfDtos() {
+        UUID excludeId = UUID.randomUUID();
+        UserMatchProfileDto dto = new UserMatchProfileDto();
+        dto.setId(UUID.randomUUID());
+        when(profileFeignClient.getAllProfiles(excludeId)).thenReturn(List.of(dto));
+
+        var result = adapter.getAllProfiles(excludeId);
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void getAllProfilesExcludingUser_feignException_throwsExternalServiceException() {
+        UUID excludeId = UUID.randomUUID();
+        when(profileFeignClient.getAllProfiles(excludeId)).thenThrow(serverError("getAllProfilesCandidates"));
+
+        assertThrows(ExternalServiceException.class, () -> adapter.getAllProfiles(excludeId));
+    }
+
+    @Test
+    void getFriends_feignException_throwsExternalServiceException() {
+        UUID id = UUID.randomUUID();
+        when(profilePublicFeignClient.getFriends(id)).thenThrow(serverError("getFriends"));
+
+        assertThrows(ExternalServiceException.class, () -> adapter.getFriends(id));
+    }
+
+    @Test
+    void addFriend_feignException_throwsExternalServiceException() {
+        UUID id = UUID.randomUUID();
+        UUID friendId = UUID.randomUUID();
+        doThrow(serverError("addFriend")).when(profilePublicFeignClient).addFriend(eq(id), any());
+
+        assertThrows(ExternalServiceException.class, () -> adapter.addFriend(id, friendId));
+    }
+
+    @Test
+    void isGeolocationEnabled_true_returnsTrue() {
+        UUID id = UUID.randomUUID();
+        when(profileFeignClient.isGeolocationEnabled(id)).thenReturn(true);
+
+        assertTrue(adapter.isGeolocationEnabled(id));
+    }
+
+    @Test
+    void isGeolocationEnabled_null_returnsFalse() {
+        UUID id = UUID.randomUUID();
+        when(profileFeignClient.isGeolocationEnabled(id)).thenReturn(null);
+
+        assertFalse(adapter.isGeolocationEnabled(id));
+    }
+
+    @Test
+    void isGeolocationEnabled_feignException_throwsExternalServiceException() {
+        UUID id = UUID.randomUUID();
+        when(profileFeignClient.isGeolocationEnabled(id)).thenThrow(serverError("isGeolocationEnabled"));
+
+        assertThrows(ExternalServiceException.class, () -> adapter.isGeolocationEnabled(id));
+    }
+
+    @Test
+    void isActive_true_returnsTrue() {
+        UUID id = UUID.randomUUID();
+        when(profileFeignClient.isActive(id)).thenReturn(true);
+
+        assertTrue(adapter.isActive(id));
+    }
+
+    @Test
+    void isActive_feignException_throwsExternalServiceException() {
+        UUID id = UUID.randomUUID();
+        when(profileFeignClient.isActive(id)).thenThrow(serverError("isActive"));
+
+        assertThrows(ExternalServiceException.class, () -> adapter.isActive(id));
+    }
+
 }

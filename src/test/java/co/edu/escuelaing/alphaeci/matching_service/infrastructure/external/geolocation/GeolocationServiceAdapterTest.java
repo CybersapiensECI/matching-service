@@ -62,4 +62,17 @@ public class GeolocationServiceAdapterTest {
 
         assertThrows(ExternalServiceException.class, () -> adapter.getNearbyUsers(id));
     }
+
+    @Test
+    void getNearbyUserIds_mapsToListOfUserIds() {
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+        when(geolocationFeignClient.getNearbyUsers(any(), anyDouble(), anyBoolean()))
+                .thenReturn(List.of(new NearbyUserDto(id1, 10.0, "zoneA"), new NearbyUserDto(id2, 20.0, "zoneB")));
+
+        var result = adapter.getNearbyUserIds(UUID.randomUUID());
+
+        assertEquals(2, result.size());
+        assertTrue(result.containsAll(List.of(id1, id2)));
+    }
 }

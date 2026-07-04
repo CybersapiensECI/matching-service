@@ -174,4 +174,37 @@ class CategoryAppMapperTest {
         List<CategoryWithTagsResponse> result = mapper.toResponseCategoryWithTags(Collections.emptyMap());
         assertThat(result).isEmpty();
     }
+
+    // ======================== toSingleResponseCategoryWithTags ========================
+
+    @Test
+    void toSingleResponseCategoryWithTags_mapsCorrectly() {
+        Category category = new Category("Sports");
+        category.setId(UUID.randomUUID());
+        UUID catId = category.getId();
+        Tag tag = new Tag("soccer", catId);
+
+        Map<Category, List<Tag>> input = new HashMap<>();
+        input.put(category, List.of(tag));
+
+        CategoryWithTagsResponse response = mapper.toSingleResponseCategoryWithTags(input);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(category.getId());
+        assertThat(response.getName()).isEqualTo(category.getName());
+        assertThat(response.getTags()).hasSize(1);
+    }
+
+    @Test
+    void toSingleResponseCategoryWithTags_emptyTagsList_mapsEmptyTags() {
+        Category category = new Category("Books");
+        category.setId(UUID.randomUUID());
+
+        Map<Category, List<Tag>> input = new HashMap<>();
+        input.put(category, List.of());
+
+        CategoryWithTagsResponse response = mapper.toSingleResponseCategoryWithTags(input);
+
+        assertThat(response.getTags()).isEmpty();
+    }
 }
