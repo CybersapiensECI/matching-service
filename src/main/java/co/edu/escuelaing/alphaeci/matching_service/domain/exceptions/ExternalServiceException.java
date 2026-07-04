@@ -1,0 +1,9 @@
+package co.edu.escuelaing.alphaeci.matching_service.domain.exceptions;
+
+import org.springframework.http.HttpStatus;
+
+public class ExternalServiceException extends MatchProfileException {
+    public ExternalServiceException(String message) {
+        super(message, HttpStatus.SERVICE_UNAVAILABLE);
+    }
+}

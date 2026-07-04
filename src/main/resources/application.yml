@@ -1,0 +1,47 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: matching-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI}
+      database: ${MONGODB_DATABASE}
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    ssl:
+      enabled: ${RABBITMQ_SSL_ENABLED:false}
+
+rabbitmq:
+  exchange:
+    matching: matching.exchange
+  routing-key:
+    match-received: match.received
+    match-response: match.response
+
+profile-service:
+  url: ${PROFILE_SERVICE_URL}
+  path: ${PROFILE_SERVICE_PATH}
+  public-path: ${PROFILE_SERVICE_PUBLIC_PATH}
+
+geolocation-service:
+  url: ${GEOLOCATION_SERVICE_URL}
+  path: ${GEOLOCATION_SERVICE_PATH}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+feign:
+  client:
+    config:
+      default:
+        connect-timeout: 5000
+        read-timeout: 10000
