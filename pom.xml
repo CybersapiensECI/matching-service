@@ -35,7 +35,7 @@
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-dependencies</artifactId>
-            <version>2024.0.2</version> <!-- release train compatible con Boot 3.4.x -->
+            <version>2025.0.2</version> <!-- release train compatible con Boot 3.5.x -->
             <type>pom</type>
             <scope>import</scope>
         </dependency>
