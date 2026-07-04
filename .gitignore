@@ -50,6 +50,11 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
+# The [Oo]ut/ rule above (Visual Studio build-output template) also matches our
+# hexagonal-architecture "ports/out" Java package — un-ignore it explicitly.
+!src/main/java/**/ports/out/
+!src/main/java/**/ports/out/**
+
 # Build results on 'Bin' directories
 **/[Bb]in/*
 # Uncomment if you have tasks that rely on *.refresh files to move binaries
