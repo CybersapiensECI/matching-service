@@ -5,7 +5,7 @@ import java.util.UUID;
 
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.geolocation.dto.NearbyUserDto;
 
@@ -17,6 +17,6 @@ import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.geolo
 public interface GeolocationFeignClient {
 
     @GetMapping("/geolocation/nearby")
-    List<NearbyUserDto> getNearbyUsers(@PathVariable UUID userId, @PathVariable Double radius, @PathVariable Boolean soloActivos);
+    List<NearbyUserDto> getNearbyUsers(@RequestParam UUID userId, @RequestParam Double radius, @RequestParam Boolean soloActivos);
 
 }
