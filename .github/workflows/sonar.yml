@@ -77,5 +77,8 @@ jobs:
           RABBITMQ_SSL_ENABLED: "false"
         run: |
           mvn clean verify sonar:sonar -B \
+            -Dsonar.organization=cybersapienseci \
+            -Dsonar.projectKey=cybersapienseci_matching-service \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.token=${SONAR_TOKEN}
+            -Dsonar.token=${SONAR_TOKEN} \
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
