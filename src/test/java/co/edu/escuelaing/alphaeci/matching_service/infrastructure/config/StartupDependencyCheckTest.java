@@ -26,6 +26,8 @@ class StartupDependencyCheckTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         check = new StartupDependencyCheck(mongoTemplate);
+        // Configured by default; tests that target the key override it.
+        ReflectionTestUtils.setField(check, "internalApiKey", "test-key");
     }
 
     @Test
@@ -35,6 +37,26 @@ class StartupDependencyCheckTest {
         check.run(applicationArguments);
 
         verify(mongoTemplate, never()).executeCommand(any(Document.class));
+    }
+
+    @Test
+    void run_failFastEnabled_internalApiKeyMissing_throwsIllegalStateException() {
+        ReflectionTestUtils.setField(check, "failFast", true);
+        ReflectionTestUtils.setField(check, "internalApiKey", "");
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> check.run(applicationArguments));
+
+        assertTrue(ex.getMessage().contains("INTERNAL_API_KEY"));
+        // Must fail before touching Mongo: config errors are cheaper to report.
+        verify(mongoTemplate, never()).executeCommand(any(Document.class));
+    }
+
+    @Test
+    void run_failFastDisabled_internalApiKeyMissing_doesNotThrow() {
+        ReflectionTestUtils.setField(check, "failFast", false);
+        ReflectionTestUtils.setField(check, "internalApiKey", null);
+
+        assertDoesNotThrow(() -> check.run(applicationArguments));
     }
 
     @Test

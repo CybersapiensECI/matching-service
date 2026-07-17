@@ -7,13 +7,15 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
+import co.edu.escuelaing.alphaeci.matching_service.infrastructure.config.InternalFeignConfig;
 import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.profile.dto.UserMatchProfileDto;
 
 @FeignClient(
     name = "profile-service",
     contextId = "profileInternal",
     url = "${PROFILE_SERVICE_URL}",
-    path = "${PROFILE_SERVICE_PATH}"
+    path = "${PROFILE_SERVICE_PATH}",
+    configuration = InternalFeignConfig.class
 )
 public interface ProfileFeignClient {
 

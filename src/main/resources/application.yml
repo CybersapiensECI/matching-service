@@ -29,6 +29,12 @@ profile-service:
   path: ${PROFILE_SERVICE_PATH}
   public-path: ${PROFILE_SERVICE_PUBLIC_PATH}
 
+internal:
+  # Shared secret sent as X-Internal-Key on calls to profile-service's
+  # /api/v1/internal/** routes. Must match INTERNAL_API_KEY in profile-service,
+  # otherwise every internal call is rejected with 403.
+  api-key: ${INTERNAL_API_KEY:}
+
 geolocation-service:
   url: ${GEOLOCATION_SERVICE_URL}
   path: ${GEOLOCATION_SERVICE_PATH}
