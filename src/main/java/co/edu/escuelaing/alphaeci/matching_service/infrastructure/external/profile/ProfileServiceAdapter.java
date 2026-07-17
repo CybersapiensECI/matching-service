@@ -1,6 +1,7 @@
 package co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.profile;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.stereotype.Component;
@@ -15,7 +16,9 @@ import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.profi
 import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.profile.dto.UserMatchProfileDto;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ProfileServiceAdapter implements ProfileServicePort {
@@ -26,7 +29,8 @@ public class ProfileServiceAdapter implements ProfileServicePort {
     @Override
     public MatchProfile getProfileById(UUID userId) {
         try {
-            return toMatchProfile(profileFeignClient.getProfileById(userId));
+            return toMatchProfile(profileFeignClient.getProfileById(userId))
+                    .orElseThrow(() -> new NotFoundException("Profile not found with ID: " + userId));
         } catch (FeignException.NotFound e) {
             throw new NotFoundException("Profile not found with ID: " + userId);
         } catch (FeignException e) {
@@ -39,6 +43,7 @@ public class ProfileServiceAdapter implements ProfileServicePort {
         try {
             return profileFeignClient.getAllProfiles().stream()
                     .map(this::toMatchProfile)
+                    .flatMap(Optional::stream)
                     .toList();
         } catch (FeignException e) {
             throw new ExternalServiceException("Profile service unavailable: " + e.getMessage());
@@ -50,6 +55,7 @@ public class ProfileServiceAdapter implements ProfileServicePort {
         try {
             return profileFeignClient.getAllProfiles(excludeUserId).stream()
                     .map(this::toMatchProfile)
+                    .flatMap(Optional::stream)
                     .toList();
         } catch (FeignException e) {
             throw new ExternalServiceException("Profile service unavailable: " + e.getMessage());
@@ -92,14 +98,21 @@ public class ProfileServiceAdapter implements ProfileServicePort {
         }
     }
 
-    private MatchProfile toMatchProfile(UserMatchProfileDto dto) {
-        return new MatchProfile(
-                dto.getId(),
+    private Optional<MatchProfile> toMatchProfile(UserMatchProfileDto dto) {
+        UUID id;
+        try {
+            id = UUID.fromString(dto.getId());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            log.warn("Skipping profile with non-UUID id from profile-service: {}", dto.getId());
+            return Optional.empty();
+        }
+        return Optional.of(new MatchProfile(
+                id,
                 dto.getCareer(),
                 dto.getSemester(),
                 dto.getTags(),
                 dto.getSchedulesAvailable(),
                 dto.isActive()
-        );
+        ));
     }
 }

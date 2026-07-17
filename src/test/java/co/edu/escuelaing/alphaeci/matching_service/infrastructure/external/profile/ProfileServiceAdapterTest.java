@@ -44,7 +44,7 @@ public class ProfileServiceAdapterTest {
     void getProfileById_success_mapsDto() {
         UUID id = UUID.randomUUID();
         UserMatchProfileDto dto = new UserMatchProfileDto();
-        dto.setId(id);
+        dto.setId(id.toString());
         dto.setCareer("COMPUTER_SCIENCE");
         dto.setSemester(3);
         dto.setTags(List.of("t1","t2"));
@@ -111,9 +111,25 @@ public class ProfileServiceAdapterTest {
     @Test
     void getAllProfiles_success_mapsListOfDtos() {
         UserMatchProfileDto dto = new UserMatchProfileDto();
-        dto.setId(UUID.randomUUID());
+        dto.setId(UUID.randomUUID().toString());
         dto.setCareer("MATHEMATICS");
         when(profileFeignClient.getAllProfiles()).thenReturn(List.of(dto));
+
+        var result = adapter.getAllProfiles();
+
+        assertEquals(1, result.size());
+        assertEquals("MATHEMATICS", result.get(0).getCareer());
+    }
+
+    @Test
+    void getAllProfiles_nonUuidId_isSkippedNotThrown() {
+        UserMatchProfileDto valid = new UserMatchProfileDto();
+        valid.setId(UUID.randomUUID().toString());
+        valid.setCareer("MATHEMATICS");
+        UserMatchProfileDto malformed = new UserMatchProfileDto();
+        malformed.setId("5e46381adc9e7f1319f50f926ec71bb2");
+        malformed.setCareer("SEED_DATA");
+        when(profileFeignClient.getAllProfiles()).thenReturn(List.of(valid, malformed));
 
         var result = adapter.getAllProfiles();
 
@@ -125,7 +141,7 @@ public class ProfileServiceAdapterTest {
     void getAllProfilesExcludingUser_success_mapsListOfDtos() {
         UUID excludeId = UUID.randomUUID();
         UserMatchProfileDto dto = new UserMatchProfileDto();
-        dto.setId(UUID.randomUUID());
+        dto.setId(UUID.randomUUID().toString());
         when(profileFeignClient.getAllProfiles(excludeId)).thenReturn(List.of(dto));
 
         var result = adapter.getAllProfiles(excludeId);
