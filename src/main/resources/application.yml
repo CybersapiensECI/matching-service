@@ -17,6 +17,10 @@ spring:
     ssl:
       enabled: ${RABBITMQ_SSL_ENABLED:false}
 
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:dev-secret-key-for-local-testing-only}
+
 rabbitmq:
   exchange:
     matching: matching.exchange
