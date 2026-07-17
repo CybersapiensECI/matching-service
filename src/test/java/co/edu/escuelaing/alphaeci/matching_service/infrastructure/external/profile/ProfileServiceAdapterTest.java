@@ -18,7 +18,6 @@ import co.edu.escuelaing.alphaeci.matching_service.domain.exceptions.ExternalSer
 import co.edu.escuelaing.alphaeci.matching_service.domain.exceptions.NotFoundException;
 import co.edu.escuelaing.alphaeci.matching_service.domain.model.MatchProfile;
 import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.profile.client.ProfileFeignClient;
-import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.profile.client.ProfilePublicFeignClient;
 import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.profile.dto.UserMatchProfileDto;
 import feign.Request;
 import feign.Response;
@@ -29,15 +28,12 @@ public class ProfileServiceAdapterTest {
     @Mock
     ProfileFeignClient profileFeignClient;
 
-    @Mock
-    ProfilePublicFeignClient profilePublicFeignClient;
-
     ProfileServiceAdapter adapter;
 
     @BeforeEach
     void setup() {
         MockitoAnnotations.openMocks(this);
-        adapter = new ProfileServiceAdapter(profileFeignClient, profilePublicFeignClient);
+        adapter = new ProfileServiceAdapter(profileFeignClient);
     }
 
     @Test
@@ -84,14 +80,14 @@ public class ProfileServiceAdapterTest {
     @Test
     void getFriends_success_and_addFriend_invokesClient() {
         UUID id = UUID.randomUUID();
-        when(profilePublicFeignClient.getFriends(id)).thenReturn(List.of(UUID.randomUUID()));
+        when(profileFeignClient.getFriends(id)).thenReturn(List.of(UUID.randomUUID()));
 
         var friends = adapter.getFriends(id);
         assertFalse(friends.isEmpty());
 
         UUID friendId = UUID.randomUUID();
         adapter.addFriend(id, friendId);
-        verify(profilePublicFeignClient).addFriend(eq(id), any());
+        verify(profileFeignClient).addFriend(eq(id), any());
     }
 
     private static FeignException serverError(String methodKey) {
@@ -160,7 +156,7 @@ public class ProfileServiceAdapterTest {
     @Test
     void getFriends_feignException_throwsExternalServiceException() {
         UUID id = UUID.randomUUID();
-        when(profilePublicFeignClient.getFriends(id)).thenThrow(serverError("getFriends"));
+        when(profileFeignClient.getFriends(id)).thenThrow(serverError("getFriends"));
 
         assertThrows(ExternalServiceException.class, () -> adapter.getFriends(id));
     }
@@ -169,7 +165,7 @@ public class ProfileServiceAdapterTest {
     void addFriend_feignException_throwsExternalServiceException() {
         UUID id = UUID.randomUUID();
         UUID friendId = UUID.randomUUID();
-        doThrow(serverError("addFriend")).when(profilePublicFeignClient).addFriend(eq(id), any());
+        doThrow(serverError("addFriend")).when(profileFeignClient).addFriend(eq(id), any());
 
         assertThrows(ExternalServiceException.class, () -> adapter.addFriend(id, friendId));
     }

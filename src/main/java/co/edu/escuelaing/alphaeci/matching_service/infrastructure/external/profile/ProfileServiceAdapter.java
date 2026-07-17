@@ -11,7 +11,6 @@ import co.edu.escuelaing.alphaeci.matching_service.domain.exceptions.NotFoundExc
 import co.edu.escuelaing.alphaeci.matching_service.domain.model.MatchProfile;
 import co.edu.escuelaing.alphaeci.matching_service.domain.ports.out.ProfileServicePort;
 import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.profile.client.ProfileFeignClient;
-import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.profile.client.ProfilePublicFeignClient;
 import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.profile.dto.FriendRequestDto;
 import co.edu.escuelaing.alphaeci.matching_service.infrastructure.external.profile.dto.UserMatchProfileDto;
 import feign.FeignException;
@@ -24,7 +23,6 @@ import lombok.extern.slf4j.Slf4j;
 public class ProfileServiceAdapter implements ProfileServicePort {
 
     private final ProfileFeignClient profileFeignClient;
-    private final ProfilePublicFeignClient profilePublicFeignClient;
 
     @Override
     public MatchProfile getProfileById(UUID userId) {
@@ -65,7 +63,7 @@ public class ProfileServiceAdapter implements ProfileServicePort {
     @Override
     public List<UUID> getFriends(UUID userId) {
         try {
-            return profilePublicFeignClient.getFriends(userId);
+            return profileFeignClient.getFriends(userId);
         } catch (FeignException e) {
             throw new ExternalServiceException("Profile service unavailable: " + e.getMessage());
         }
@@ -74,7 +72,7 @@ public class ProfileServiceAdapter implements ProfileServicePort {
     @Override
     public void addFriend(UUID userId, UUID friendId) {
         try {
-            profilePublicFeignClient.addFriend(userId, new FriendRequestDto(friendId));
+            profileFeignClient.addFriend(userId, new FriendRequestDto(friendId));
         } catch (FeignException e) {
             throw new ExternalServiceException("Profile service unavailable while adding friend: " + e.getMessage());
         }
