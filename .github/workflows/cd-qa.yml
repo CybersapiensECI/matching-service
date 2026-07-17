@@ -73,13 +73,17 @@ jobs:
 
       - name: Health check QA
         run: |
-          sleep 30
-          STATUS=$(az containerapp show \
+          QA_URL=$(az containerapp show \
             --name alphaeci-matching-service-qa \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query "properties.runningStatus" -o tsv)
-          echo "QA status: $STATUS"
-          if [ "$STATUS" != "Running" ]; then
-            echo "QA health check failed"
-            exit 1
-          fi
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "QA URL: https://$QA_URL"
+          # Container may be scaled to zero (minReplicas: 0): the first request
+          # wakes it up, so retry instead of trusting a single runningStatus read.
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://$QA_URL/actuator/health")
+            echo "Attempt $i — HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then exit 0; fi
+            sleep 15
+          done
+          echo "QA health check failed" && exit 1

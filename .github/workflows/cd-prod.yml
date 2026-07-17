@@ -34,13 +34,15 @@ jobs:
 
       - name: Health check Prod
         run: |
-          sleep 30
-          STATUS=$(az containerapp show \
+          PROD_URL=$(az containerapp show \
             --name alphaeci-matching-service-prod \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query "properties.runningStatus" -o tsv)
-          echo "Prod status: $STATUS"
-          if [ "$STATUS" != "Running" ]; then
-            echo "Prod health check failed"
-            exit 1
-          fi
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "Prod URL: https://$PROD_URL"
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://$PROD_URL/actuator/health")
+            echo "Attempt $i — HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then exit 0; fi
+            sleep 15
+          done
+          echo "Prod health check failed" && exit 1
