@@ -13,6 +13,7 @@ import co.edu.escuelaing.alphaeci.matching_service.domain.exceptions.InvalidInpu
 import co.edu.escuelaing.alphaeci.matching_service.domain.exceptions.NotFoundException;
 import co.edu.escuelaing.alphaeci.matching_service.domain.model.Match;
 import co.edu.escuelaing.alphaeci.matching_service.domain.model.MatchProfile;
+import co.edu.escuelaing.alphaeci.matching_service.domain.model.Relationship;
 import co.edu.escuelaing.alphaeci.matching_service.domain.model.enums.MatchStatus;
 import co.edu.escuelaing.alphaeci.matching_service.domain.ports.in.RecommendationsUseCasePort;
 import co.edu.escuelaing.alphaeci.matching_service.domain.ports.out.MatchEventPublisherPort;
@@ -75,7 +76,8 @@ class MatchingServiceImplTest {
         MatchProfile profile = new MatchProfile(requesterId, "Systems", 4, List.of("java"), List.of("monday-morning"), true);
         when(profileServicePort.getProfileById(requesterId)).thenReturn(profile);
         when(profileServicePort.getFriends(requesterId)).thenReturn(List.of());
-        when(matchRepository.existsByRequesterIdAndTargetId(requesterId, targetId)).thenReturn(false);
+        when(matchRepository.findByRequesterId(requesterId)).thenReturn(List.of());
+        when(matchRepository.findByRequesterId(targetId)).thenReturn(List.of());
         when(recommendationsUseCase.calculateAffinityScore(requesterId, targetId)).thenReturn(pendingMatch.getAffinityScore());
         when(matchRepository.save(any(Match.class))).thenReturn(pendingMatch);
 
@@ -137,11 +139,55 @@ class MatchingServiceImplTest {
         MatchProfile profile = new MatchProfile(requesterId, "Systems", 4, List.of("java"), List.of("monday-morning"), true);
         when(profileServicePort.getProfileById(requesterId)).thenReturn(profile);
         when(profileServicePort.getFriends(requesterId)).thenReturn(List.of());
-        when(matchRepository.existsByRequesterIdAndTargetId(requesterId, targetId)).thenReturn(true);
+        when(matchRepository.findByRequesterId(requesterId)).thenReturn(List.of(pendingMatch));
 
         assertThatThrownBy(() -> matchingService.createMatch(requesterId, targetId))
                 .isInstanceOf(InvalidInputException.class)
                 .hasMessageContaining("Already exists a match request");
+    }
+
+    @Test
+    void createMatch_pendingFromOtherDirection_throwsInvalidInputException() {
+        // El PENDING existente lo mandó el target hacia el requester (dirección
+        // contraria) — antes existsByRequesterIdAndTargetId(requesterId, targetId)
+        // no lo veía y dejaba crear un segundo documento para el mismo par.
+        Match reversePending = new Match();
+        reversePending.setIdMatch(UUID.randomUUID());
+        reversePending.setRequesterId(targetId);
+        reversePending.setTargetId(requesterId);
+        reversePending.setStatus(MatchStatus.PENDING);
+
+        MatchProfile profile = new MatchProfile(requesterId, "Systems", 4, List.of("java"), List.of("monday-morning"), true);
+        when(profileServicePort.getProfileById(requesterId)).thenReturn(profile);
+        when(profileServicePort.getFriends(requesterId)).thenReturn(List.of());
+        when(matchRepository.findByRequesterId(requesterId)).thenReturn(List.of());
+        when(matchRepository.findByRequesterId(targetId)).thenReturn(List.of(reversePending));
+
+        assertThatThrownBy(() -> matchingService.createMatch(requesterId, targetId))
+                .isInstanceOf(InvalidInputException.class)
+                .hasMessageContaining("Already exists a match request");
+    }
+
+    @Test
+    void createMatch_rejectedExists_deletesStaleDocAndCreatesNew() {
+        Match rejected = new Match();
+        rejected.setIdMatch(UUID.randomUUID());
+        rejected.setRequesterId(requesterId);
+        rejected.setTargetId(targetId);
+        rejected.setStatus(MatchStatus.REJECTED);
+
+        MatchProfile profile = new MatchProfile(requesterId, "Systems", 4, List.of("java"), List.of("monday-morning"), true);
+        when(profileServicePort.getProfileById(requesterId)).thenReturn(profile);
+        when(profileServicePort.getFriends(requesterId)).thenReturn(List.of());
+        when(matchRepository.findByRequesterId(requesterId)).thenReturn(List.of(rejected));
+        when(recommendationsUseCase.calculateAffinityScore(requesterId, targetId)).thenReturn(pendingMatch.getAffinityScore());
+        when(matchRepository.save(any(Match.class))).thenReturn(pendingMatch);
+
+        Match result = matchingService.createMatch(requesterId, targetId);
+
+        assertThat(result.getStatus()).isEqualTo(MatchStatus.PENDING);
+        verify(matchRepository).delete(rejected.getIdMatch());
+        verify(matchRepository).save(any(Match.class));
     }
 
     // ======================== GET MATCH ========================
@@ -290,5 +336,91 @@ class MatchingServiceImplTest {
 
         assertThatThrownBy(() -> matchingService.cancelMatch(matchId, requesterId))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    // ======================== RELATIONSHIP ========================
+
+    @Test
+    void getRelationship_alreadyFriends_returnsFriend() {
+        when(profileServicePort.getFriends(requesterId)).thenReturn(List.of(targetId));
+
+        Relationship result = matchingService.getRelationship(requesterId, targetId);
+
+        assertThat(result.getStatus()).isEqualTo(Relationship.RelationshipStatus.FRIEND);
+        assertThat(result.getMatchId()).isNull();
+        verify(matchRepository, never()).findByRequesterId(any());
+    }
+
+    @Test
+    void getRelationship_pendingSent_returnsPendingSent() {
+        when(profileServicePort.getFriends(requesterId)).thenReturn(List.of());
+        when(matchRepository.findByRequesterId(requesterId)).thenReturn(List.of(pendingMatch));
+
+        Relationship result = matchingService.getRelationship(requesterId, targetId);
+
+        assertThat(result.getStatus()).isEqualTo(Relationship.RelationshipStatus.PENDING_SENT);
+        assertThat(result.getMatchId()).isEqualTo(matchId);
+    }
+
+    @Test
+    void getRelationship_pendingReceived_returnsPendingReceived() {
+        // Lo mandó el otro usuario hacia el userId que pregunta.
+        Match receivedMatch = new Match();
+        receivedMatch.setIdMatch(UUID.randomUUID());
+        receivedMatch.setRequesterId(targetId);
+        receivedMatch.setTargetId(requesterId);
+        receivedMatch.setStatus(MatchStatus.PENDING);
+
+        when(profileServicePort.getFriends(requesterId)).thenReturn(List.of());
+        when(matchRepository.findByRequesterId(requesterId)).thenReturn(List.of());
+        when(matchRepository.findByTargetId(requesterId)).thenReturn(List.of(receivedMatch));
+
+        Relationship result = matchingService.getRelationship(requesterId, targetId);
+
+        assertThat(result.getStatus()).isEqualTo(Relationship.RelationshipStatus.PENDING_RECEIVED);
+        assertThat(result.getMatchId()).isEqualTo(receivedMatch.getIdMatch());
+    }
+
+    @Test
+    void getRelationship_nothing_returnsNone() {
+        when(profileServicePort.getFriends(requesterId)).thenReturn(List.of());
+        when(matchRepository.findByRequesterId(requesterId)).thenReturn(List.of());
+        when(matchRepository.findByTargetId(requesterId)).thenReturn(List.of());
+
+        Relationship result = matchingService.getRelationship(requesterId, targetId);
+
+        assertThat(result.getStatus()).isEqualTo(Relationship.RelationshipStatus.NONE);
+    }
+
+    // ======================== REMOVE FRIEND ========================
+
+    @Test
+    void removeFriend_success_deletesAcceptedMatchBetweenThem() {
+        pendingMatch.setStatus(MatchStatus.ACCEPTED);
+        when(matchRepository.findByRequesterId(requesterId)).thenReturn(List.of(pendingMatch));
+
+        matchingService.removeFriend(requesterId, targetId);
+
+        verify(profileServicePort).removeFriend(requesterId, targetId);
+        verify(matchRepository).delete(pendingMatch.getIdMatch());
+    }
+
+    @Test
+    void removeFriend_noAcceptedMatch_doesNotDeleteAnything() {
+        when(matchRepository.findByRequesterId(requesterId)).thenReturn(List.of());
+        when(matchRepository.findByRequesterId(targetId)).thenReturn(List.of());
+
+        matchingService.removeFriend(requesterId, targetId);
+
+        verify(profileServicePort).removeFriend(requesterId, targetId);
+        verify(matchRepository, never()).delete(any());
+    }
+
+    @Test
+    void removeFriend_profileServiceFails_throwsExternalServiceException() {
+        doThrow(new RuntimeException("down")).when(profileServicePort).removeFriend(requesterId, targetId);
+
+        assertThatThrownBy(() -> matchingService.removeFriend(requesterId, targetId))
+                .isInstanceOf(ExternalServiceException.class);
     }
 }

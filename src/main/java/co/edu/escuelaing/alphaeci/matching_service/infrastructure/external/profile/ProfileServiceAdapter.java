@@ -79,6 +79,15 @@ public class ProfileServiceAdapter implements ProfileServicePort {
     }
 
     @Override
+    public void removeFriend(UUID userId, UUID friendId) {
+        try {
+            profileFeignClient.removeFriend(userId, friendId);
+        } catch (FeignException e) {
+            throw new ExternalServiceException("Profile service unavailable while removing friend: " + e.getMessage());
+        }
+    }
+
+    @Override
     public boolean isGeolocationEnabled(UUID userId) {
         try {
             return Boolean.TRUE.equals(profileFeignClient.isGeolocationEnabled(userId));

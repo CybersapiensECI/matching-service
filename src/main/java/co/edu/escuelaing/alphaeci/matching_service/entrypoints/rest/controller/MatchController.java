@@ -18,6 +18,7 @@ import co.edu.escuelaing.alphaeci.matching_service.application.dto.request.Filte
 import co.edu.escuelaing.alphaeci.matching_service.application.dto.request.MatchRequest;
 import co.edu.escuelaing.alphaeci.matching_service.application.dto.request.MatchUpdateRequest;
 import co.edu.escuelaing.alphaeci.matching_service.application.dto.response.MatchResponse;
+import co.edu.escuelaing.alphaeci.matching_service.application.dto.response.RelationshipResponse;
 import co.edu.escuelaing.alphaeci.matching_service.application.dto.response.NearbyRecommendationResponse;
 import co.edu.escuelaing.alphaeci.matching_service.application.dto.response.RecommendationResponse;
 import co.edu.escuelaing.alphaeci.matching_service.application.dto.response.RecommendationWithScoreResponse;
@@ -173,6 +174,38 @@ public class MatchController {
             @Parameter(description = "ID of the match") @PathVariable UUID id,
             @Parameter(description = "ID of the user cancelling") @RequestParam UUID userId) {
         matchUseCase.cancelMatch(id, userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ---------------- RELATIONSHIP STATUS ----------------
+    @GetMapping("/relationship")
+    @Operation(summary = "Get relationship status between two users",
+               description = "Single source of truth for a public profile's connect/message button: FRIEND, "
+                       + "PENDING_SENT, PENDING_RECEIVED or NONE. Checks profile-service's friendsId first, "
+                       + "then pending match requests in both directions.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Relationship retrieved",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = RelationshipResponse.class),
+                examples = @ExampleObject(value = "{\"status\":\"FRIEND\",\"matchId\":null}")))
+    })
+    public ResponseEntity<RelationshipResponse> getRelationship(
+            @Parameter(description = "ID of the user asking") @RequestParam UUID userId,
+            @Parameter(description = "ID of the other user") @RequestParam UUID otherUserId) {
+        return ResponseEntity.ok(RelationshipResponse.from(matchUseCase.getRelationship(userId, otherUserId)));
+    }
+
+    // ---------------- REMOVE FRIEND ----------------
+    @DeleteMapping("/friends/{friendId}")
+    @Operation(summary = "Remove a friendship",
+               description = "Unfriends both users in profile-service and clears the underlying ACCEPTED match "
+                       + "so they can send a new match request later if they want to reconnect.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Friendship removed successfully")
+    })
+    public ResponseEntity<Void> removeFriend(
+            @Parameter(description = "ID of the user removing the friend") @RequestParam UUID userId,
+            @Parameter(description = "ID of the friend to remove") @PathVariable UUID friendId) {
+        matchUseCase.removeFriend(userId, friendId);
         return ResponseEntity.noContent().build();
     }
 

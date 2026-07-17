@@ -11,6 +11,7 @@ public interface ProfileServicePort {
     List<MatchProfile> getAllProfiles(UUID excludeUserId);
     List<UUID> getFriends(UUID userId);
     void addFriend(UUID userId, UUID friendId);
+    void removeFriend(UUID userId, UUID friendId);
     boolean isGeolocationEnabled(UUID userId);
     boolean isActive(UUID userId);
 }

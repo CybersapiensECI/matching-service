@@ -8,6 +8,7 @@ import co.edu.escuelaing.alphaeci.matching_service.domain.exceptions.ExternalSer
 import co.edu.escuelaing.alphaeci.matching_service.domain.exceptions.InvalidInputException;
 import co.edu.escuelaing.alphaeci.matching_service.domain.exceptions.NotFoundException;
 import co.edu.escuelaing.alphaeci.matching_service.domain.model.Match;
+import co.edu.escuelaing.alphaeci.matching_service.domain.model.Relationship;
 import co.edu.escuelaing.alphaeci.matching_service.domain.model.enums.MatchStatus;
 import co.edu.escuelaing.alphaeci.matching_service.domain.ports.in.MatchUseCasePort;
 import co.edu.escuelaing.alphaeci.matching_service.domain.ports.in.RecommendationsUseCasePort;
@@ -17,6 +18,7 @@ import co.edu.escuelaing.alphaeci.matching_service.domain.ports.out.ProfileServi
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -48,8 +50,23 @@ public class MatchingServiceImpl implements MatchUseCasePort {
             throw new InvalidInputException("Cannot send a match request to someone who is already your friend");
         }
 
-        if (matchRepository.existsByRequesterIdAndTargetId(requesterId, targetId)) {
-            throw new InvalidInputException("Already exists a match request between requester and target");
+        // Bidireccional a propósito: existsByRequesterIdAndTargetId(requesterId, targetId)
+        // solo miraba una dirección, así que A podía volver a pedirle a B por el otro
+        // lado incluso con un match PENDING/ACCEPTED ya abierto de B hacia A, dejando
+        // dos documentos de match independientes para el mismo par (visible como
+        // "Rechazada" en Enviadas para una pareja que en realidad ya es amiga).
+        Optional<Match> existing = findExistingBetween(requesterId, targetId);
+        if (existing.isPresent()) {
+            Match match = existing.get();
+            if (match.getStatus() == MatchStatus.PENDING) {
+                throw new InvalidInputException("Already exists a match request between requester and target");
+            }
+            if (match.getStatus() == MatchStatus.ACCEPTED) {
+                throw new InvalidInputException("Cannot send a match request to someone who is already your friend");
+            }
+            // REJECTED: se limpia para permitir un intento nuevo sin dejar el
+            // documento viejo dando vueltas para siempre.
+            matchRepository.delete(match.getIdMatch());
         }
 
         Match match = new Match();
@@ -119,5 +136,54 @@ public class MatchingServiceImpl implements MatchUseCasePort {
             throw new InvalidInputException("Only pending match requests can be cancelled");
         }
         matchRepository.delete(matchId);
+    }
+
+    @Override
+    public Relationship getRelationship(UUID userId, UUID otherUserId) {
+        if (profileServicePort.getFriends(userId).contains(otherUserId)) {
+            return Relationship.of(Relationship.RelationshipStatus.FRIEND, null);
+        }
+
+        Optional<Match> sent = matchRepository.findByRequesterId(userId).stream()
+                .filter(m -> m.getTargetId().equals(otherUserId) && m.getStatus() == MatchStatus.PENDING)
+                .findFirst();
+        if (sent.isPresent()) {
+            return Relationship.of(Relationship.RelationshipStatus.PENDING_SENT, sent.get().getIdMatch());
+        }
+
+        Optional<Match> received = matchRepository.findByTargetId(userId).stream()
+                .filter(m -> m.getRequesterId().equals(otherUserId) && m.getStatus() == MatchStatus.PENDING)
+                .findFirst();
+        if (received.isPresent()) {
+            return Relationship.of(Relationship.RelationshipStatus.PENDING_RECEIVED, received.get().getIdMatch());
+        }
+
+        return Relationship.of(Relationship.RelationshipStatus.NONE, null);
+    }
+
+    @Override
+    public void removeFriend(UUID userId, UUID friendId) {
+        try {
+            profileServicePort.removeFriend(userId, friendId);
+        } catch (Exception e) {
+            log.warn("Could not remove friendship in profile service for {}/{}: {}", userId, friendId, e.getMessage());
+            throw new ExternalServiceException("Cannot remove friend right now, please try again later");
+        }
+
+        // Limpia cualquier match ACCEPTED que quede entre los dos (en cualquier
+        // dirección) para que puedan volver a conectar más adelante sin chocar
+        // con el existsByRequesterIdAndTargetId/findExistingBetween de arriba.
+        findExistingBetween(userId, friendId)
+                .filter(m -> m.getStatus() == MatchStatus.ACCEPTED)
+                .ifPresent(m -> matchRepository.delete(m.getIdMatch()));
+    }
+
+    private Optional<Match> findExistingBetween(UUID a, UUID b) {
+        return matchRepository.findByRequesterId(a).stream()
+                .filter(m -> m.getTargetId().equals(b))
+                .findFirst()
+                .or(() -> matchRepository.findByRequesterId(b).stream()
+                        .filter(m -> m.getTargetId().equals(a))
+                        .findFirst());
     }
 }
