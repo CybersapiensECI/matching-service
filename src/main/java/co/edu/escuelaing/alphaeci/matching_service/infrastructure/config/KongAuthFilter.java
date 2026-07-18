@@ -8,12 +8,15 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -26,6 +29,9 @@ import java.util.Optional;
 public class KongAuthFilter extends OncePerRequestFilter {
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
+
+	@Value("${app.jwt.secret}")
+	private String jwtSecret;
 
 	@Override
 	protected void doFilterInternal(HttpServletRequest request,
@@ -43,6 +49,12 @@ public class KongAuthFilter extends OncePerRequestFilter {
 			String[] parts = token.split("\\.");
 
 			if (parts.length != 3) {
+				filterChain.doFilter(request, response);
+				return;
+			}
+
+			if (!signatureValid(parts)) {
+				log.warn("JWT con firma invalida");
 				filterChain.doFilter(request, response);
 				return;
 			}
@@ -67,6 +79,18 @@ public class KongAuthFilter extends OncePerRequestFilter {
 		}
 
 		filterChain.doFilter(request, response);
+	}
+
+	private boolean signatureValid(String[] parts) {
+		try {
+			Mac mac = Mac.getInstance("HmacSHA256");
+			mac.init(new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+			byte[] hash = mac.doFinal((parts[0] + "." + parts[1]).getBytes(StandardCharsets.UTF_8));
+			String expectedSignature = Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
+			return expectedSignature.equals(parts[2]);
+		} catch (Exception e) {
+			return false;
+		}
 	}
 
 	private Optional<String> readTextClaim(JsonNode claims, String claimName) {

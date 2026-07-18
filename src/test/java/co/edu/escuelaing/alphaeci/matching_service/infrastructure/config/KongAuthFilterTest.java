@@ -6,18 +6,24 @@ import static org.mockito.Mockito.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 class KongAuthFilterTest {
+
+    private static final String TEST_SECRET = "unit-test-secret-key";
 
     private KongAuthFilter filter;
     private HttpServletRequest request;
@@ -27,6 +33,7 @@ class KongAuthFilterTest {
     @BeforeEach
     void setUp() {
         filter = new KongAuthFilter();
+        ReflectionTestUtils.setField(filter, "jwtSecret", TEST_SECRET);
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         filterChain = mock(FilterChain.class);
@@ -39,11 +46,25 @@ class KongAuthFilterTest {
     }
 
     private static String base64Url(String json) {
-        return Base64.getUrlEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String hmacSign(String data, String secret) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] hash = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static String bearerToken(String payloadJson) {
-        return "Bearer header." + base64Url(payloadJson) + ".signature";
+        String header = base64Url("{\"alg\":\"HS256\"}");
+        String payload = base64Url(payloadJson);
+        String signature = hmacSign(header + "." + payload, TEST_SECRET);
+        return "Bearer " + header + "." + payload + "." + signature;
     }
 
     @Test
@@ -199,5 +220,32 @@ class KongAuthFilterTest {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         assertNotNull(auth);
         assertTrue(auth.getAuthorities().stream().map(GrantedAuthority::getAuthority).anyMatch("ROLE_USER"::equals));
+    }
+
+    @Test
+    void tamperedSignature_isRejected() throws Exception {
+        String header = base64Url("{\"alg\":\"HS256\"}");
+        String payload = base64Url("{\"sub\":\"user1\",\"role\":\"admin\"}");
+        String forgedSignature = hmacSign(header + "." + payload, "wrong-secret");
+        String token = "Bearer " + header + "." + payload + "." + forgedSignature;
+        when(request.getHeader("Authorization")).thenReturn(token);
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Test
+    void unsignedForgedToken_isRejected() throws Exception {
+        String header = base64Url("{\"alg\":\"none\"}");
+        String payload = base64Url("{\"sub\":\"attacker\",\"role\":\"admin\"}");
+        String token = "Bearer " + header + "." + payload + ".forged-signature";
+        when(request.getHeader("Authorization")).thenReturn(token);
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
 }
