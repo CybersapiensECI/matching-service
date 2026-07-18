@@ -112,18 +112,40 @@ public class RecommendationsUseCaseImpl implements RecommendationsUseCasePort {
         return profileServicePort.getAllProfiles(userId);
     }
 
+    /**
+     * Scores de afinidad contra TODOS los demás perfiles, sin recortar a 20
+     * — a diferencia de getRecommendationsForUser/getRecommendedProfilesForUser,
+     * que sí truncan (para el feed de "top 20" tal cual). getFilteredRecommendations
+     * necesita el pool completo para poder filtrar antes de recortar.
+     */
+    private Map<UUID, AffinityScore> fullAffinityScores(UUID userId) {
+        MatchProfile requester = profileServicePort.getProfileById(userId);
+        Map<UUID, AffinityScore> scores = new HashMap<>();
+        for (MatchProfile target : getAllOtherProfiles(userId)) {
+            scores.put(target.getId(), affinityCalculator.calculate(requester, target));
+        }
+        return scores;
+    }
+
     @Override
     public List<UUID> getFilteredRecommendations(UUID userId, FilterCriteriaRequest filters) {
+        // Antes: se filtraba sobre el top-20 ya recortado (o, en geolocalización,
+        // sobre candidatos sin ningún orden por afinidad) — un candidato de alta
+        // afinidad que no entraba en ese recorte previo se perdía aunque sí
+        // cumpliera los filtros. Ahora: filtrar primero sobre el pool completo,
+        // ordenar por score, recién ahí recortar a 20.
+        Map<UUID, AffinityScore> scores = fullAffinityScores(userId);
+
         List<MatchProfile> candidates;
         if (filters.isGeolocation()) {
-            Set<UUID> nearbyIds = getNearbyRecommendationsForUser(userId).stream()
-                    .map(NearbyRecommendation::getUserId)
+            Set<UUID> nearbyIds = geolocationServicePort.getNearbyUsers(userId).stream()
+                    .map(NearbyUserDistance::getUserId)
                     .collect(Collectors.toSet());
             candidates = getAllOtherProfiles(userId).stream()
                     .filter(p -> nearbyIds.contains(p.getId()))
                     .toList();
         } else {
-            candidates = getRecommendedProfilesForUser(userId);
+            candidates = getAllOtherProfiles(userId);
         }
 
         List<UUID> result = candidates.stream()
@@ -134,6 +156,8 @@ public class RecommendationsUseCaseImpl implements RecommendationsUseCasePort {
                         || filters.getSemesters().ordinal() + 1 == p.getSemester())
                 .filter(p -> filters.getTag() == null
                         || (p.getTags() != null && p.getTags().contains(filters.getTag())))
+                .sorted(Comparator.comparingDouble(
+                        (MatchProfile p) -> scores.get(p.getId()).getTotalScore()).reversed())
                 .map(MatchProfile::getId)
                 .limit(20)
                 .toList();

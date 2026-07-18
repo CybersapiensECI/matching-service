@@ -7,11 +7,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import co.edu.escuelaing.alphaeci.matching_service.application.dto.request.FilterCriteriaRequest;
 import co.edu.escuelaing.alphaeci.matching_service.application.service.AffinityCalculator;
 import co.edu.escuelaing.alphaeci.matching_service.domain.exceptions.NoRecommendationsFoundException;
 import co.edu.escuelaing.alphaeci.matching_service.domain.model.MatchProfile;
 import co.edu.escuelaing.alphaeci.matching_service.domain.model.NearbyRecommendation;
 import co.edu.escuelaing.alphaeci.matching_service.domain.model.NearbyUserDistance;
+import co.edu.escuelaing.alphaeci.matching_service.domain.model.enums.CareersEnum;
 import co.edu.escuelaing.alphaeci.matching_service.domain.ports.out.GeolocationServicePort;
 import co.edu.escuelaing.alphaeci.matching_service.domain.ports.out.ProfileServicePort;
 import co.edu.escuelaing.alphaeci.matching_service.domain.valueobjects.AffinityScore;
@@ -179,5 +181,68 @@ class RecommendationsUseCaseImplTest {
         assertThat(result.get(0).getDistanceMeters()).isEqualTo(45.0);
         assertThat(result.get(1).getUserId()).isEqualTo(otherId1);
         assertThat(result.get(1).getDistanceMeters()).isEqualTo(120.0);
+    }
+
+    private FilterCriteriaRequest filterByCareer(CareersEnum career) {
+        FilterCriteriaRequest filters = new FilterCriteriaRequest();
+        filters.setCareers(career);
+        return filters;
+    }
+
+    @Test
+    void getFilteredRecommendations_filtersBeforeLimiting_keepsLowScoreMatchOverHighScoreNonMatch() {
+        // otherProfile1: score alto pero carrera que NO se pide.
+        // otherProfile2: score bajo pero SÍ es la carrera pedida.
+        // Filtrar antes de recortar a 20 debe quedarse con otherProfile2
+        // aunque su score sea menor — filtrar DESPUÉS de un recorte por
+        // score lo habría perdido si hubiera más de 20 candidatos de mayor
+        // score sin la carrera pedida.
+        otherProfile1.setCareer("CIVIL_ENGINEERING");
+        otherProfile2.setCareer("SYSTEMS_ENGINEERING");
+        when(profileServicePort.getProfileById(userId)).thenReturn(userProfile);
+        when(profileServicePort.getAllProfiles(userId)).thenReturn(List.of(otherProfile1, otherProfile2));
+        when(affinityCalculator.calculate(userProfile, otherProfile1)).thenReturn(scoreWith(0.95));
+        when(affinityCalculator.calculate(userProfile, otherProfile2)).thenReturn(scoreWith(0.1));
+
+        List<UUID> result = recommendationsUseCase.getFilteredRecommendations(
+                userId, filterByCareer(CareersEnum.SYSTEMS_ENGINEERING));
+
+        assertThat(result).containsExactly(otherId2);
+    }
+
+    @Test
+    void getFilteredRecommendations_geolocation_sortsSurvivorsByScoreDescending() {
+        otherProfile1.setCareer("SYSTEMS_ENGINEERING");
+        otherProfile2.setCareer("SYSTEMS_ENGINEERING");
+        when(profileServicePort.getProfileById(userId)).thenReturn(userProfile);
+        when(profileServicePort.getAllProfiles(userId)).thenReturn(List.of(otherProfile1, otherProfile2));
+        // Orden de "cercanos" a propósito al revés del orden por score, para
+        // probar que el resultado se ordena por afinidad y no por la
+        // respuesta cruda de geolocalización.
+        when(geolocationServicePort.getNearbyUsers(userId)).thenReturn(List.of(
+                new NearbyUserDistance(otherId1, 10.0),
+                new NearbyUserDistance(otherId2, 500.0)
+        ));
+        when(affinityCalculator.calculate(userProfile, otherProfile1)).thenReturn(scoreWith(0.2));
+        when(affinityCalculator.calculate(userProfile, otherProfile2)).thenReturn(scoreWith(0.9));
+
+        FilterCriteriaRequest filters = new FilterCriteriaRequest();
+        filters.setGeolocation(true);
+
+        List<UUID> result = recommendationsUseCase.getFilteredRecommendations(userId, filters);
+
+        assertThat(result).containsExactly(otherId2, otherId1);
+    }
+
+    @Test
+    void getFilteredRecommendations_noSurvivors_throwsNoRecommendationsFoundException() {
+        otherProfile1.setCareer("CIVIL_ENGINEERING");
+        when(profileServicePort.getProfileById(userId)).thenReturn(userProfile);
+        when(profileServicePort.getAllProfiles(userId)).thenReturn(List.of(otherProfile1));
+        when(affinityCalculator.calculate(any(), any())).thenReturn(scoreWith(0.5));
+
+        assertThatThrownBy(() -> recommendationsUseCase.getFilteredRecommendations(
+                userId, filterByCareer(CareersEnum.SYSTEMS_ENGINEERING)))
+                .isInstanceOf(NoRecommendationsFoundException.class);
     }
 }
